@@ -44,4 +44,5 @@ class MyClient(discord.Client):
 
 client = MyClient(intents=intents)
 
-client.run('MTU2Mjk5ODg2NDQxODU3NDQyNg.GKYpls.6YcLPg5BY-aN02mC_CIZUhDse00KEOr_x2IRaY')
+client.run(os.environ.get("DISCORD_TOKEN"))
+
