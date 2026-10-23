@@ -3,7 +3,8 @@ import discord
 from google import genai
 
 # Initialize the Gemini client with your API key
-gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY")
+gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
 
 # Set up Discord intents
 intents = discord.Intents.default()
