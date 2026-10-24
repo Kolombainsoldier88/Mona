@@ -1,4 +1,4 @@
-    async def on_message(self, message):
+async def on_message(self, message):
         # Don't respond to the bot's own messages
         if message.author == self.user:
             return
