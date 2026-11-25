@@ -1,0 +1,14 @@
+name: Keep Mona Awake
+
+on:
+  schedule:
+    # Runs every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Lets you trigger a test ping manually
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Service
+        run: curl -f -s -o /dev/null https://mona-0rzb.onrender.com || exit 0
