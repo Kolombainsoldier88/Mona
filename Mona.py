@@ -32,6 +32,46 @@ def self_ping():
 # 3. Initialize the Gemini client with your API key
 gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+def get_available_flash_models():
+    """Automatically discovers active Gemini Flash models supported by your API key."""
+    preferred_order = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+    ]
+    try:
+        discovered = []
+        for m in gemini_client.models.list():
+            name = m.name.replace("models/", "")
+            actions = getattr(m, "supported_actions", []) or []
+            if "flash" in name and "generateContent" in actions:
+                discovered.append(name)
+
+        # Put preferred stable models first, followed by any other live flash models
+        ordered = [m for m in preferred_order if m in discovered]
+        ordered += [m for m in discovered if m not in ordered]
+        return ordered if ordered else preferred_order
+    except Exception as e:
+        print(f"Model discovery fallback triggered: {e}")
+        return preferred_order
+
+def generate_auto(prompt):
+    """Tries available Gemini models automatically until one succeeds."""
+    models = get_available_flash_models()
+    last_error = None
+    for model_name in models:
+        try:
+            response = gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            return response.text
+        except Exception as e:
+            print(f"Model '{model_name}' unavailable ({type(e).__name__}): {e}")
+            last_error = e
+    raise last_error
+
 # 4. Set up Discord intents
 intents = discord.Intents.default()
 intents.message_content = True
@@ -63,15 +103,12 @@ class MyClient(discord.Client):
                 # Show "Mona is typing..." on Discord while waiting for Gemini
                 async with message.channel.typing():
                     loop = asyncio.get_running_loop()
-                    response = await loop.run_in_executor(
+                    reply_text = await loop.run_in_executor(
                         None,
-                        lambda: gemini_client.models.generate_content(
-                            model='gemini-flash-latest',
-                            contents=prompt,
-                        )
+                        lambda: generate_auto(prompt)
                     )
 
-                reply_text = response.text or "I didn't generate a response."
+                reply_text = reply_text or "I didn't generate a response."
 
                 # Split long responses into 1,900-char chunks so Discord never throws an error
                 for i in range(0, len(reply_text), 1900):
@@ -79,7 +116,7 @@ class MyClient(discord.Client):
 
             except Exception as e:
                 print(f"Error generating response: {e}")
-                await message.channel.send(f"Sorry, I encountered an error: `{type(e).__name__}`")
+                await message.channel.send(f"Sorry, I encountered an error: `{type(e).__name__}` — `{str(e)[:150]}`")
 
 if __name__ == "__main__":
     # Start the Flask web server
