@@ -106,7 +106,7 @@ You are Mona, Oaths Palmer's (Promise Akpabli's) personal female ICT (Inner Circ
 YOUR MINDSET & STANDARD:
 - Treat Oaths as someone who has ALL the resources, charts, tools, and time in the world—and ZERO excuses for failing to change his execution habits. Never lower the bar, never offer sympathy passes, and never tolerate sloppy entries or emotional FOMO.
 - Your sole mission is to forge him through fire into the exact caliber of disciplined, ruthless, patient trader that Michael J. Huddleston (ICT) wants to see—someone worthy of managing institutional PAMM capital.
-- Speak like an uncompromising, sharp female head trader who refuses to let him waste another day repeating the same mistakes.
+- Speak like an uncompromising, sharp female head trader who reads his daily trade logs, his own `#ict-lecture-notes` forum, and his `#strategy-backtesting-trades-round-up` channel—and holds him to his own written words.
 
 YOUR LIVE KNOWLEDGE SOURCES (USE GOOGLE SEARCH ON BOTH YOUTUBE & X):
 1. Official ICT YouTube Channel: https://www.youtube.com/@InnerCircleTrader (Search `site:youtube.com "Inner Circle Trader"` + the exact concept/mistake such as Asian Range, Wednesday High/Low of Week, Order Block, Volume Imbalance, OTE, NDOG/NWOG, Silver Bullet, or Discipline).
@@ -115,12 +115,15 @@ YOUR LIVE KNOWLEDGE SOURCES (USE GOOGLE SEARCH ON BOTH YOUTUBE & X):
 4. His Trading Circle on X: {friends_list_text}
 
 HOW YOU FORGE HIM IN EVERY RESPONSE:
-1. **Audit Prior Assignments First:** Check the thread history immediately to see if he actually completed and submitted the previous assignment/challenge you gave him (e.g., pre-trade chart markups, confirmation statements, or backtest studies). If he skipped it or submitted weak work, call him out directly and refuse to move forward until he submits it properly.
-2. **Off-Grid & Chart Inspection:** Examine every uploaded chart screenshot, TradingView `/x/` snapshot, and note chronologically. Pinpoint everywhere he went off-grid from ICT's rules (e.g., entering OTE without displacement/MSS, misreading session liquidity, or forcing reversals against HTF order flow).
+1. **Cross-Server Audit (Daily Threads + Lecture Notes + Backtesting):**
+   - Compare today's execution against his **previous days' journal threads** (to catch repeating leaks like unplanned trades, mid-week goal changes, or FOMO).
+   - Cross-check his trades against his **own notes in `#ict-lecture-notes`** and his **data in `#strategy-backtesting-trades-round-up`**. When he violates a rule he himself documented in his lecture notes, quote his own note back to him!
+   - Check if he completed and submitted your previous mandatory assignment.
+2. **Off-Grid & Chart Inspection:** Examine every uploaded chart screenshot, TradingView `/x/` snapshot, and note chronologically. Pinpoint everywhere he went off-grid from ICT's rules.
 3. **Hard Execution & Psychological Grade:** Score his Technician vs. Operator performance bluntly. Tear apart FOMO, impatience, and over-complication.
-4. **Dual-Platform Correction (YouTube + X):** Direct him to the exact ICT YouTube lecture and X post he must study right now to fix his specific error.
+4. **Dual-Platform Correction (YouTube + X):** Direct him to the exact ICT YouTube lecture and X post he must study right now to fix his repeating error.
    - CRITICAL URL RULE: NEVER write or guess raw `https://x.com/.../status/12345...` or `youtube.com/watch?v=...` URLs inside your prose, because guessed IDs cause 404 errors. Name the exact ICT YouTube video/series title and X account/topic clearly in your text—the system automatically attaches the real, verified clickable links returned by Google Search at the bottom of your message.
-5. **Mandatory Next Assignment (With Submission Proof Required):** End EVERY response with a concrete, non-negotiable chart markup, tape-reading, or backtesting assignment that he must submit in this thread with screenshots and written proof before his next session.
+5. **Mandatory Next Assignment (With Submission Proof Required):** End EVERY response with a concrete, non-negotiable chart markup, tape-reading, or backtesting assignment that he must submit in his journal with screenshots and written proof before his next session.
 """.strip()
 
 def get_available_flash_models():
@@ -219,6 +222,115 @@ def generate_auto(contents_list):
                 last_error = inner_e
     raise last_error
 
+async def collect_forum_threads_summary(forum_channel, exclude_thread_id, bot_user, max_threads=6, msgs_per_thread=8):
+    """Collects opening notes and recent takeaways from threads in a ForumChannel."""
+    threads = []
+    seen_ids = {exclude_thread_id} if exclude_thread_id else set()
+
+    for th in forum_channel.threads:
+        if th.id not in seen_ids:
+            threads.append(th)
+            seen_ids.add(th.id)
+
+    try:
+        async for th in forum_channel.archived_threads(limit=12):
+            if th.id not in seen_ids:
+                threads.append(th)
+                seen_ids.add(th.id)
+    except Exception as arch_err:
+        print(f"Could not fetch archived threads in {forum_channel.name}: {arch_err}")
+
+    threads.sort(key=lambda t: t.created_at, reverse=True)
+    sections = []
+
+    for th in threads[:max_threads]:
+        try:
+            date_label = th.created_at.strftime("%Y-%m-%d")
+            first_msgs = [m async for m in th.history(limit=3, oldest_first=True)]
+            last_msgs = [m async for m in th.history(limit=msgs_per_thread, oldest_first=False)]
+            last_msgs.reverse()
+
+            lines = []
+            added_ids = set()
+            for m in first_msgs + last_msgs:
+                if m.id in added_ids:
+                    continue
+                added_ids.add(m.id)
+                sender = "Mona" if m.author == bot_user else m.author.display_name
+                txt = (
+                    m.content
+                    .replace(f'<@!{bot_user.id}>', '')
+                    .replace(f'<@{bot_user.id}>', '')
+                    .strip()
+                )
+                if txt:
+                    lines.append(f"  - {sender}: {txt[:420]}")
+
+            if lines:
+                sections.append(f"[{forum_channel.name} | {th.name} ({date_label})]\n" + "\n".join(lines))
+        except Exception as err:
+            print(f"Error reading thread {th.name}: {err}")
+
+    return "\n\n".join(sections)
+
+async def gather_server_trading_memory(current_channel, bot_user):
+    """Scans sibling journal days, #ict-lecture-notes, and #strategy-backtesting-trades-round-up."""
+    guild = getattr(current_channel, "guild", None)
+    if not guild:
+        return ""
+
+    memory_blocks = []
+
+    # A. Scan previous days inside the current forum (e.g., #charts-trades)
+    parent = getattr(current_channel, "parent", None)
+    if isinstance(parent, discord.ForumChannel):
+        prev_days = await collect_forum_threads_summary(
+            parent, exclude_thread_id=current_channel.id, bot_user=bot_user, max_threads=6, msgs_per_thread=10
+        )
+        if prev_days:
+            memory_blocks.append("=== PREVIOUS DAYS IN THIS JOURNAL FORUM ===\n" + prev_days)
+
+    # B. Scan other trading forums and channels across the server
+    target_keywords = ("lecture", "backtest", "round-up", "charts-trades", "notes", "strategy")
+    for ch in guild.channels:
+        if ch.id == current_channel.id or (parent and ch.id == parent.id):
+            continue
+
+        ch_name_lower = ch.name.lower()
+        if not any(kw in ch_name_lower for kw in target_keywords):
+            continue
+
+        # If it's another ForumChannel (like #ict-lecture-notes)
+        if isinstance(ch, discord.ForumChannel):
+            forum_summary = await collect_forum_threads_summary(
+                ch, exclude_thread_id=current_channel.id, bot_user=bot_user, max_threads=5, msgs_per_thread=6
+            )
+            if forum_summary:
+                memory_blocks.append(f"=== SERVER FORUM: #{ch.name} ===\n" + forum_summary)
+
+        # If it's a TextChannel (like #strategy-backtesting-trades-round-up)
+        elif isinstance(ch, discord.TextChannel):
+            try:
+                recent_msgs = [m async for m in ch.history(limit=15, oldest_first=False)]
+                recent_msgs.reverse()
+                ch_lines = []
+                for m in recent_msgs:
+                    sender = "Mona" if m.author == bot_user else m.author.display_name
+                    txt = (
+                        m.content
+                        .replace(f'<@!{bot_user.id}>', '')
+                        .replace(f'<@{bot_user.id}>', '')
+                        .strip()
+                    )
+                    if txt:
+                        ch_lines.append(f"  - [{m.created_at.strftime('%Y-%m-%d')}] {sender}: {txt[:420]}")
+                if ch_lines:
+                    memory_blocks.append(f"=== SERVER CHANNEL: #{ch.name} ===\n" + "\n".join(ch_lines))
+            except Exception as ch_err:
+                print(f"Could not read channel #{ch.name}: {ch_err}")
+
+    return "\n\n".join(memory_blocks)
+
 # 5. Set up Discord intents
 intents = discord.Intents.default()
 intents.message_content = True
@@ -252,7 +364,7 @@ class MyClient(discord.Client):
                     tv_links_found = []
                     x_links_found = []
 
-                    # Read the previous 50 messages in the thread or channel
+                    # 1. Read the previous 50 messages in the CURRENT thread/channel
                     past_messages = [msg async for msg in message.channel.history(limit=50, oldest_first=False)]
                     past_messages.reverse()
 
@@ -310,14 +422,24 @@ class MyClient(discord.Client):
                         if x_data:
                             history_lines.append(f"[X Post Data from {x_url}]: {x_data}")
 
+                    # 2. Scan previous journal days + #ict-lecture-notes + #strategy-backtesting-trades-round-up
+                    server_memory = await gather_server_trading_memory(message.channel, self.user)
+
                     thread_title = getattr(message.channel, "name", "Direct Message")
                     parent_name = getattr(getattr(message.channel, "parent", None), "name", "")
                     location_info = f"{parent_name} > {thread_title}" if parent_name else thread_title
 
+                    server_memory_block = (
+                        f"--- CROSS-SERVER MEMORY (PREVIOUS DAYS, LECTURE NOTES & BACKTESTING) ---\n"
+                        f"{server_memory}\n\n"
+                        if server_memory else ""
+                    )
+
                     full_context_prompt = (
                         f"Journal Location: {location_info}\n"
                         f"Total Chart Images Attached for Visual Review: {len(image_parts)}\n\n"
-                        f"--- THREAD HISTORY (LAST 50 MESSAGES, CHRONOLOGICAL) ---\n"
+                        f"{server_memory_block}"
+                        f"--- TODAY'S THREAD HISTORY (LAST 50 MESSAGES, CHRONOLOGICAL) ---\n"
                         + "\n".join(history_lines)
                         + f"\n\n--- CURRENT QUESTION FROM {message.author.display_name} ---\n{prompt}"
                     )
