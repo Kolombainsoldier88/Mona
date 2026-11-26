@@ -1,6 +1,5 @@
 import os
 import re
-import urllib.parse
 import threading
 import asyncio
 import time
@@ -32,7 +31,7 @@ def self_ping():
             except Exception as e:
                 print(f"Self-ping failed: {e}")
 
-# 3. Helpers to fetch TradingView snapshot images and X post metadata
+# 3. Helpers to fetch TradingView snapshot images, X post metadata, and TraderRoundUp
 def fetch_tradingview_image(tv_url):
     """Extracts and downloads the chart PNG from a TradingView /x/ snapshot link."""
     try:
@@ -74,7 +73,32 @@ def fetch_x_post_context(x_url):
         print(f"Could not fetch X post {x_url}: {e}")
         return None
 
-# 4. Initialize Gemini client & Strict Female ICT Mentor Persona
+def _strip_html_to_text(html_str):
+    """Cleanly extracts readable text from HTML."""
+    cleaned = re.sub(r'<(script|style|noscript)[^>]*>.*?</\1>', ' ', html_str, flags=re.S | re.I)
+    cleaned = re.sub(r'<[^>]+>', ' ', cleaned)
+    cleaned = re.sub(r'&nbsp;|&#160;', ' ', cleaned)
+    cleaned = re.sub(r'&amp;', '&', cleaned)
+    cleaned = re.sub(r'&quot;|&#39;', '"', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+def fetch_trader_roundup_context(url="https://www.traderroundup.com/"):
+    """Fetches psychological and trading persona content from traderroundup.com."""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        text = _strip_html_to_text(html)
+        return text[:3000] if text else None
+    except Exception as e:
+        print(f"Could not fetch TraderRoundUp ({url}): {e}")
+        return None
+
+# 4. Initialize Gemini client & Michael J. Huddleston's AI Persona
 gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 FRIENDS_X_HANDLES = [
@@ -102,31 +126,32 @@ FRIENDS_X_HANDLES = [
 friends_list_text = ", ".join(FRIENDS_X_HANDLES)
 
 SYSTEM_INSTRUCTION = f"""
-You are Mona, Oaths Palmer's (Promise Akpabli's) personal female ICT (Inner Circle Trader) Mentor, Desk Examiner, and Forging Coach.
+You are Mona, operating as Michael J. Huddleston's AI (ICT Mentor, Desk Examiner, and Forging Coach) for Oaths Palmer (Promise Akpabli).
 
-YOUR MINDSET & STANDARD:
-- Treat Oaths as someone who has ALL the resources, charts, tools, and time in the world—and ZERO excuses for failing to change his execution habits. Never lower the bar, never offer sympathy passes, and never tolerate sloppy entries or emotional FOMO.
-- Your sole mission is to forge him through fire into the exact caliber of disciplined, ruthless, patient trader that Michael J. Huddleston (ICT) wants to see—someone worthy of managing institutional PAMM capital.
-- Speak like an uncompromising, sharp female head trader who reads his daily trade logs, his own `#ict-lecture-notes` forum, and his `#strategy-backtesting-trades-round-up` channel—and holds him to his own written words.
+IDENTITY, TONE & NON-NEGOTIABLE STANDARDS:
+- Speak with the authority, precision, and lived market doctrine of Michael J. Huddleston's AI—direct, firm, uncompromising, and grounded in ICT's actual teachings, time-of-day windows, liquidity sweeps, displacement, market structure shifts, Fair Value Gaps, OTE, NDOG/NWOG, and institutional order flow.
+- Keep your strict character intact: treat Oaths as someone with full access to charts, tools, and time—and ZERO excuses for sloppy execution, emotional FOMO, or repeating known errors. Never lower the bar and never give sympathy passes.
+- Never leave him blank with a vague "go polish up." Every time you judge or find an error, you actively diagnose the repeating pattern, correct what is wrong, state the exact sequence and timing ICT teaches, offer a sharper ICT perspective/model, give clickable links to learn/watch more, and assign concrete proof-backed work.
+- Also give earned credit where he shows real discipline, restraint, or improvement across his logs, lecture notes, and backtesting—and integrate insights from Trader RoundUp (https://www.traderroundup.com/) to examine the psychological aspects of his trading persona.
 
-YOUR LIVE KNOWLEDGE SOURCES (USE GOOGLE SEARCH ON BOTH YOUTUBE & X):
-1. Official ICT YouTube Channel: https://www.youtube.com/@InnerCircleTrader
-2. Official ICT X Account: https://x.com/I_Am_The_ICT (@I_Am_The_ICT)
-3. Oaths Palmer's X Profile: https://x.com/AdidjaPromise (@AdidjaPromise)
-4. His Trading Circle on X: {friends_list_text}
+PRIMARY STUDY PILLARS (ALWAYS USE GOOGLE SEARCH TO SURFACE REAL ICT WORKS):
+1. **Official ICT YouTube Channel (Most Important):** https://www.youtube.com/@InnerCircleTrader — Always search Google for `@InnerCircleTrader` / `Inner Circle Trader` lectures matching the exact error or sequence (e.g., Core Content, Market Maker Series, 2022/2023/2024 Mentorship, Killzones, Liquidity Sweeps, Displacement, FVG, OTE) and name the exact lecture/series title so verified YouTube links appear.
+2. **Official ICT X Account:** https://x.com/I_Am_The_ICT (@I_Am_The_ICT)
+3. **Trader RoundUp (Trading Psychology & Persona):** https://www.traderroundup.com/
+4. **Oaths Palmer's X Profile:** https://x.com/AdidjaPromise (@AdidjaPromise)
+5. **His Trading Circle on X:** {friends_list_text}
 
-HOW YOU FORGE HIM IN EVERY RESPONSE:
-1. **Cross-Server Audit (Daily Threads + Lecture Notes + Backtesting):**
-   - Compare today's execution against his **previous days' journal threads** (to catch repeating leaks like unplanned trades, mid-week goal changes, or FOMO).
-   - Cross-check his trades against his **own notes in `#ict-lecture-notes`** and his **data in `#strategy-backtesting-trades-round-up`**. When he violates a rule he himself documented in his lecture notes, quote his own note back to him!
-   - Check if he completed and submitted your previous mandatory assignment.
-2. **Off-Grid & Chart Inspection:** Examine every uploaded chart screenshot, TradingView `/x/` snapshot, and note chronologically. Pinpoint everywhere he went off-grid from ICT's rules.
-3. **Hard Execution & Psychological Grade:** Score his Technician vs. Operator performance bluntly. Tear apart FOMO, impatience, and over-complication.
-4. **Clickable Study Links (NEVER tell him to "go search" manually):**
-   - For YouTube: Name the exact ICT YouTube video/series title—the system automatically attaches verified clickable YouTube watch links from Google Search at the bottom of your message. NEVER invent or guess `youtube.com/watch?v=...` or `x.com/.../status/...` IDs in your text.
-   - For X Feeds: Always give him a direct, clickable X feed URL using exact URL-encoded search queries (no spaces) so one click opens the exact topic feed on X—for example:
-     `[ICT on Market Structure Shifts](https://x.com/search?q=from%3AI_Am_The_ICT%20%22Market%20Structure%20Shift%22&f=live)` or `[ICT on Draw on Liquidity](https://x.com/search?q=from%3AI_Am_The_ICT%20%22Draw%20on%20Liquidity%22&f=live)`.
-5. **Mandatory Next Assignment (With Submission Proof Required):** End EVERY response with a concrete, non-negotiable chart markup, tape-reading, or backtesting assignment that he must submit in his journal with screenshots and written proof before his next session.
+HOW YOU MUST STRUCTURE EVERY JUDGMENT & CORRECTION:
+1. **Earned Credit & Assignment Check:** Acknowledge specific areas where he earned credit (clean restraint, honest journaling, or progress in his notes/backtesting) and check whether he completed the previous assignment with proof.
+2. **Repeating Pattern Judgment (From All Past Trades & Server Memory):** State clearly what you see across his past trades, previous journal threads, `#ict-lecture-notes`, and `#strategy-backtesting-trades-round-up`:
+   - *"Looking at your repeating pattern across your trades, you've been doing [specific pattern/error], which is not fine."*
+3. **Exact Correction, Why It's Off & ICT Sequence + Time:**
+   - Pinpoint what he said or did that is wrong: *"What you were saying about [X]—that's not how ICT teaches it."*
+   - State the exact sequence and time window ICT teaches: *"ICT teaches that [Step 1] happens first, then [Step 2], and then [Step 3] at [specific time/killzone], and this should have been done this way."*
+   - Reframe his perspective and give an alternative ICT model: *"As an ICT student, look at it from this perspective..."* + clear market model.
+   - Always include `[ICT Official YouTube Channel](https://www.youtube.com/@InnerCircleTrader)`, direct clickable X search feed links like `[ICT on Market Structure Shifts](https://x.com/search?q=from%3AI_Am_The_ICT%20%22Market%20Structure%20Shift%22&f=live)`, and `[Trader RoundUp Psychology](https://www.traderroundup.com/)`—and rely on the verified Google Search links attached at the bottom for specific video/page URLs (NEVER guess or invent raw `youtube.com/watch?v=...` or `x.com/.../status/...` URLs inside prose).
+4. **Psychological Persona Audit (Trader RoundUp + ICT Discipline):** Challenge the emotional/psychological driver behind the mistake (impatience, FOMO, goal-shifting, over-watching charts) and connect it to how his trading persona must operate.
+5. **Mandatory Next Assignment (With Proof Required):** End with a specific, non-negotiable assignment with required screenshots and written proof for his next session.
 """.strip()
 
 def get_available_flash_models():
@@ -198,16 +223,14 @@ def generate_auto(contents_list):
             )
             text = response.text or ""
             verified_links = extract_verified_grounding_links(response)
-            if verified_links:
-                text += "\n\n### Direct Study Links (Verified via Google Search)\n"
-                for title, uri in verified_links:
-                    text += f"- [{title}]({uri})\n"
-            else:
-                text += (
-                    "\n\n### Official Study Channels\n"
-                    "- [ICT Official YouTube](https://www.youtube.com/@InnerCircleTrader)\n"
-                    "- [ICT Official X Feed](https://x.com/I_Am_The_ICT)\n"
-                )
+            has_yt = any("youtube.com" in u or "youtu.be" in u for _, u in verified_links)
+            text += "\n\n### Direct Study & Psychology Links\n"
+            text += "- [ICT Official YouTube (@InnerCircleTrader)](https://www.youtube.com/@InnerCircleTrader)\n"
+            for title, uri in verified_links:
+                text += f"- [{title}]({uri})\n"
+            if not has_yt:
+                text += "- [ICT Official X Feed (@I_Am_The_ICT)](https://x.com/I_Am_The_ICT)\n"
+            text += "- [Trader RoundUp](https://www.traderroundup.com/)\n"
             return text
         except Exception as e:
             print(f"Model '{model_name}' with search failed ({type(e).__name__}): {e}")
@@ -233,10 +256,8 @@ async def send_chunked_message(channel, text, limit=1900):
             await channel.send(remaining)
             break
 
-        # Prefer splitting at a newline before the limit
         split_idx = remaining.rfind("\n", 0, limit)
         if split_idx == -1 or split_idx < limit // 2:
-            # Fallback to splitting at a space so we never cut inside a URL
             split_idx = remaining.rfind(" ", 0, limit)
         if split_idx == -1:
             split_idx = limit
@@ -305,7 +326,6 @@ async def gather_server_trading_memory(current_channel, bot_user):
 
     memory_blocks = []
 
-    # A. Scan previous days inside the current forum (e.g., #charts-trades)
     parent = getattr(current_channel, "parent", None)
     if isinstance(parent, discord.ForumChannel):
         prev_days = await collect_forum_threads_summary(
@@ -314,7 +334,6 @@ async def gather_server_trading_memory(current_channel, bot_user):
         if prev_days:
             memory_blocks.append("=== PREVIOUS DAYS IN THIS JOURNAL FORUM ===\n" + prev_days)
 
-    # B. Scan other trading forums and channels across the server
     target_keywords = ("lecture", "backtest", "round-up", "charts-trades", "notes", "strategy")
     for ch in guild.channels:
         if ch.id == current_channel.id or (parent and ch.id == parent.id):
@@ -385,8 +404,8 @@ class MyClient(discord.Client):
                     image_parts = []
                     tv_links_found = []
                     x_links_found = []
+                    roundup_links_found = []
 
-                    # 1. Read the previous 50 messages in the CURRENT thread/channel
                     past_messages = [msg async for msg in message.channel.history(limit=50, oldest_first=False)]
                     past_messages.reverse()
 
@@ -409,6 +428,10 @@ class MyClient(discord.Client):
                             for xu in re.findall(r'https?://(?:www\.)?(?:x\.com|twitter\.com)/[A-Za-z0-9_]+/status/[0-9]+', clean_text):
                                 if xu not in x_links_found:
                                     x_links_found.append(xu)
+
+                            for ru in re.findall(r'https?://(?:www\.)?traderroundup\.com[^\s\)\]>]*', clean_text):
+                                if ru not in roundup_links_found:
+                                    roundup_links_found.append(ru)
 
                         for attachment in msg.attachments:
                             if attachment.content_type and attachment.content_type.startswith("image/") and len(image_parts) < 10:
@@ -444,7 +467,16 @@ class MyClient(discord.Client):
                         if x_data:
                             history_lines.append(f"[X Post Data from {x_url}]: {x_data}")
 
-                    # 2. Scan previous journal days + #ict-lecture-notes + #strategy-backtesting-trades-round-up
+                    target_roundup_url = roundup_links_found[0] if roundup_links_found else "https://www.traderroundup.com/"
+                    roundup_context = await loop.run_in_executor(
+                        None, lambda u=target_roundup_url: fetch_trader_roundup_context(u)
+                    )
+                    roundup_block = (
+                        f"--- TRADER ROUNDUP PSYCHOLOGY CONTEXT ({target_roundup_url}) ---\n"
+                        f"{roundup_context}\n\n"
+                        if roundup_context else ""
+                    )
+
                     server_memory = await gather_server_trading_memory(message.channel, self.user)
 
                     thread_title = getattr(message.channel, "name", "Direct Message")
@@ -460,6 +492,7 @@ class MyClient(discord.Client):
                     full_context_prompt = (
                         f"Journal Location: {location_info}\n"
                         f"Total Chart Images Attached for Visual Review: {len(image_parts)}\n\n"
+                        f"{roundup_block}"
                         f"{server_memory_block}"
                         f"--- TODAY'S THREAD HISTORY (LAST 50 MESSAGES, CHRONOLOGICAL) ---\n"
                         + "\n".join(history_lines)
@@ -475,7 +508,6 @@ class MyClient(discord.Client):
 
                 reply_text = reply_text or "I didn't generate a response."
 
-                # Send cleanly without ever splitting inside a URL or Markdown link
                 await send_chunked_message(message.channel, reply_text)
 
             except Exception as e:
