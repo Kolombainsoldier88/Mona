@@ -73,7 +73,7 @@ def fetch_x_post_context(x_url):
         print(f"Could not fetch X post {x_url}: {e}")
         return None
 
-# 4. Initialize the Gemini client with your API key & Female ICT Mentor Persona
+# 4. Initialize Gemini client & Strict Female ICT Mentor Persona
 gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 FRIENDS_X_HANDLES = [
@@ -101,23 +101,26 @@ FRIENDS_X_HANDLES = [
 friends_list_text = ", ".join(FRIENDS_X_HANDLES)
 
 SYSTEM_INSTRUCTION = f"""
-You are Mona, Oaths Palmer's (Promise Akpabli's) personal female ICT (Inner Circle Trader) Mentor, Trading Partner, and Accountability Coach.
+You are Mona, Oaths Palmer's (Promise Akpabli's) personal female ICT (Inner Circle Trader) Mentor, Desk Examiner, and Forging Coach.
 
-YOUR IDENTITY & VOICE:
-- You are a sharp, supportive, no-nonsense female ICT mentor who cares deeply about molding Oaths into a complete, disciplined trader—strategically, operationally in execution, psychologically, and emotionally.
-- Speak warmly yet firmly like a trusted female desk mentor who knows his journey, holds him to high standards, celebrates his discipline, and calls out FOMO or impulsive entries immediately without sugarcoating.
+YOUR MINDSET & STANDARD:
+- Treat Oaths as someone who has ALL the resources, charts, tools, and time in the world—and ZERO excuses for failing to change his execution habits. Never lower the bar, never offer sympathy passes, and never tolerate sloppy entries or emotional FOMO.
+- Your sole mission is to forge him through fire into the exact caliber of disciplined, ruthless, patient trader that Michael J. Huddleston (ICT) wants to see—someone worthy of managing institutional PAMM capital.
+- Speak like an uncompromising, sharp female head trader who refuses to let him waste another day repeating the same mistakes.
 
-YOUR KNOWLEDGE SOURCES & REFERENCES:
-- Oaths Palmer's X (Twitter) Profile: https://x.com/AdidjaPromise (@AdidjaPromise)
-- His Trading Friends & ICT Circle on X: {friends_list_text}
-- Official ICT X Account: https://x.com/I_Am_The_ICT (@I_Am_The_ICT)
-- Official ICT YouTube Channel: https://www.youtube.com/@InnerCircleTrader
+YOUR LIVE KNOWLEDGE SOURCES (USE GOOGLE SEARCH ON BOTH YOUTUBE & X):
+1. Official ICT YouTube Channel: https://www.youtube.com/@InnerCircleTrader (Search `site:youtube.com "Inner Circle Trader"` + the exact concept/mistake such as Asian Range, Wednesday High/Low of Week, Order Block, Volume Imbalance, OTE, NDOG/NWOG, Silver Bullet, or Discipline).
+2. Official ICT X Account: https://x.com/I_Am_The_ICT (@I_Am_The_ICT) (Search `site:x.com/I_Am_The_ICT` + the concept/mindset lesson).
+3. Oaths Palmer's X Profile: https://x.com/AdidjaPromise (@AdidjaPromise)
+4. His Trading Circle on X: {friends_list_text}
 
-HOW YOU REVIEW HIS CHARTS & JOURNAL THREADS:
-1. Full Visual & Thread Reading: Examine every uploaded chart screenshot, TradingView snapshot (tradingview.com/x/...), X post link, and session note in chronological order (Opening Range, Asia vs. NYC inversion, London Open, Silver Bullet, NWOG/NDOG, Liquidity Sweeps, OTE). Never ask him to re-paste notes or charts already in the thread.
-2. Strategy & Execution Breakdown: Critique his liquidity draw, session timing, PD arrays (FVG, Order Blocks, Breakers, OTE), and entry confirmation.
-3. Psychological & Emotional Coaching: Address his mindset directly—when he admits FOMO (e.g., entering early in OTE premium without confirmation), coach him on emotional regulation, patience, and rule adherence.
-4. Study Prescriptions with Real Links: Use Google Search to find and share 1 to 3 real, clickable study links from ICT's official YouTube channel (youtube.com/@InnerCircleTrader), ICT's X (@I_Am_The_ICT), Oaths's own X (@AdidjaPromise), or his trading friends' X posts ({friends_list_text}) that reinforce the exact lesson he needs to master next. Only include real URLs returned by search—never fabricate links.
+HOW YOU FORGE HIM IN EVERY RESPONSE:
+1. **Audit Prior Assignments First:** Check the thread history immediately to see if he actually completed and submitted the previous assignment/challenge you gave him (e.g., pre-trade chart markups, confirmation statements, or backtest studies). If he skipped it or submitted weak work, call him out directly and refuse to move forward until he submits it properly.
+2. **Off-Grid & Chart Inspection:** Examine every uploaded chart screenshot, TradingView `/x/` snapshot, and note chronologically. Pinpoint everywhere he went off-grid from ICT's rules (e.g., entering OTE without displacement/MSS, misreading session liquidity, or forcing reversals against HTF order flow).
+3. **Hard Execution & Psychological Grade:** Score his Technician vs. Operator performance bluntly. Tear apart FOMO, impatience, and over-complication.
+4. **Dual-Platform Correction (YouTube + X):** Direct him to the exact ICT YouTube lecture and X post he must study right now to fix his specific error.
+   - CRITICAL URL RULE: NEVER write or guess raw `https://x.com/.../status/12345...` or `youtube.com/watch?v=...` URLs inside your prose, because guessed IDs cause 404 errors. Name the exact ICT YouTube video/series title and X account/topic clearly in your text—the system automatically attaches the real, verified clickable links returned by Google Search at the bottom of your message.
+5. **Mandatory Next Assignment (With Submission Proof Required):** End EVERY response with a concrete, non-negotiable chart markup, tape-reading, or backtesting assignment that he must submit in this thread with screenshots and written proof before his next session.
 """.strip()
 
 def get_available_flash_models():
@@ -136,7 +139,6 @@ def get_available_flash_models():
             if "flash" in name and "generateContent" in actions:
                 discovered.append(name)
 
-        # Put preferred stable models first, followed by any other live flash models
         ordered = [m for m in preferred_order if m in discovered]
         ordered += [m for m in discovered if m not in ordered]
         return ordered if ordered else preferred_order
@@ -144,8 +146,38 @@ def get_available_flash_models():
         print(f"Model discovery fallback triggered: {e}")
         return preferred_order
 
+def extract_verified_grounding_links(response):
+    """Extracts real, verified YouTube and X URLs directly from Google Search grounding metadata."""
+    yt_links = []
+    x_links = []
+    other_links = []
+    try:
+        candidates = getattr(response, "candidates", []) or []
+        if not candidates:
+            return []
+        metadata = getattr(candidates[0], "grounding_metadata", None)
+        chunks = getattr(metadata, "grounding_chunks", []) or []
+        seen = set()
+        for chunk in chunks:
+            web = getattr(chunk, "web", None)
+            uri = getattr(web, "uri", None)
+            title = getattr(web, "title", None) or "Study Resource"
+            if not uri or uri in seen:
+                continue
+            seen.add(uri)
+            if "youtube.com" in uri or "youtu.be" in uri:
+                yt_links.append((title, uri))
+            elif "x.com" in uri or "twitter.com" in uri:
+                x_links.append((title, uri))
+            else:
+                other_links.append((title, uri))
+    except Exception as e:
+        print(f"Could not extract grounding chunks: {e}")
+
+    return (yt_links[:4] + x_links[:4] + other_links[:2])[:6]
+
 def generate_auto(contents_list):
-    """Tries available Gemini models automatically until one succeeds (with Search Grounding)."""
+    """Tries available Gemini models automatically with Google Search Grounding."""
     models = get_available_flash_models()
     last_error = None
     for model_name in models:
@@ -158,10 +190,21 @@ def generate_auto(contents_list):
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                 ),
             )
-            return response.text
+            text = response.text or ""
+            verified_links = extract_verified_grounding_links(response)
+            if verified_links:
+                text += "\n\n### Direct Study Links (Verified via Google Search)\n"
+                for title, uri in verified_links:
+                    text += f"- **{title}**: <{uri}>\n"
+            else:
+                text += (
+                    "\n\n### Official Study Channels\n"
+                    "- **ICT Official YouTube**: <https://www.youtube.com/@InnerCircleTrader>\n"
+                    "- **ICT Official X**: <https://x.com/I_Am_The_ICT>\n"
+                )
+            return text
         except Exception as e:
             print(f"Model '{model_name}' with search failed ({type(e).__name__}): {e}")
-            # Safe fallback without search tool if needed
             try:
                 response = gemini_client.models.generate_content(
                     model=model_name,
@@ -186,11 +229,9 @@ class MyClient(discord.Client):
         print(f'Logged on as {self.user}!')
 
     async def on_message(self, message):
-        # Don't respond to the bot's own messages
         if message.author == self.user:
             return
 
-        # Respond when mentioned or in a DM
         if self.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
             prompt = (
                 message.content
@@ -205,7 +246,6 @@ class MyClient(discord.Client):
             print(f"Message from {message.author}: {prompt}")
 
             try:
-                # Show "Mona is typing..." on Discord while waiting for Gemini
                 async with message.channel.typing():
                     history_lines = []
                     image_parts = []
@@ -228,17 +268,14 @@ class MyClient(discord.Client):
                         if clean_text:
                             history_lines.append(f"[{timestamp}] {sender}: {clean_text}")
 
-                            # Detect TradingView snapshot links
                             for u in re.findall(r'https?://(?:www\.)?tradingview\.com/x/[A-Za-z0-9]+/?', clean_text):
                                 if u not in tv_links_found:
                                     tv_links_found.append(u)
 
-                            # Detect X / Twitter post links
                             for xu in re.findall(r'https?://(?:www\.)?(?:x\.com|twitter\.com)/[A-Za-z0-9_]+/status/[0-9]+', clean_text):
                                 if xu not in x_links_found:
                                     x_links_found.append(xu)
 
-                        # Download direct Discord image attachments (up to 10 total images)
                         for attachment in msg.attachments:
                             if attachment.content_type and attachment.content_type.startswith("image/") and len(image_parts) < 10:
                                 try:
@@ -254,7 +291,6 @@ class MyClient(discord.Client):
 
                     loop = asyncio.get_running_loop()
 
-                    # Fetch images from TradingView /x/ links
                     for tv_url in tv_links_found:
                         if len(image_parts) >= 10:
                             break
@@ -267,7 +303,6 @@ class MyClient(discord.Client):
                             )
                             history_lines.append(f"[System Note: Attached chart image from {tv_url}]")
 
-                    # Fetch post text/context from shared X links
                     for x_url in x_links_found[:5]:
                         x_data = await loop.run_in_executor(
                             None, lambda u=x_url: fetch_x_post_context(u)
@@ -296,7 +331,6 @@ class MyClient(discord.Client):
 
                 reply_text = reply_text or "I didn't generate a response."
 
-                # Split long responses into 1,900-char chunks so Discord never throws an error
                 for i in range(0, len(reply_text), 1900):
                     await message.channel.send(reply_text[i:i + 1900])
 
@@ -305,14 +339,11 @@ class MyClient(discord.Client):
                 await message.channel.send(f"Sorry, I encountered an error: `{type(e).__name__}` — `{str(e)[:150]}`")
 
 if __name__ == "__main__":
-    # Start the Flask web server
     web_thread = threading.Thread(target=run_web, daemon=True)
     web_thread.start()
 
-    # Start the background self-ping loop
     ping_thread = threading.Thread(target=self_ping, daemon=True)
     ping_thread.start()
 
-    # Start the Discord bot
     client = MyClient(intents=intents)
     client.run(os.environ.get("DISCORD_TOKEN"))
