@@ -1,5 +1,6 @@
 import os
 import re
+import urllib.parse
 import threading
 import asyncio
 import time
@@ -109,8 +110,8 @@ YOUR MINDSET & STANDARD:
 - Speak like an uncompromising, sharp female head trader who reads his daily trade logs, his own `#ict-lecture-notes` forum, and his `#strategy-backtesting-trades-round-up` channel—and holds him to his own written words.
 
 YOUR LIVE KNOWLEDGE SOURCES (USE GOOGLE SEARCH ON BOTH YOUTUBE & X):
-1. Official ICT YouTube Channel: https://www.youtube.com/@InnerCircleTrader (Search `site:youtube.com "Inner Circle Trader"` + the exact concept/mistake such as Asian Range, Wednesday High/Low of Week, Order Block, Volume Imbalance, OTE, NDOG/NWOG, Silver Bullet, or Discipline).
-2. Official ICT X Account: https://x.com/I_Am_The_ICT (@I_Am_The_ICT) (Search `site:x.com/I_Am_The_ICT` + the concept/mindset lesson).
+1. Official ICT YouTube Channel: https://www.youtube.com/@InnerCircleTrader
+2. Official ICT X Account: https://x.com/I_Am_The_ICT (@I_Am_The_ICT)
 3. Oaths Palmer's X Profile: https://x.com/AdidjaPromise (@AdidjaPromise)
 4. His Trading Circle on X: {friends_list_text}
 
@@ -121,8 +122,10 @@ HOW YOU FORGE HIM IN EVERY RESPONSE:
    - Check if he completed and submitted your previous mandatory assignment.
 2. **Off-Grid & Chart Inspection:** Examine every uploaded chart screenshot, TradingView `/x/` snapshot, and note chronologically. Pinpoint everywhere he went off-grid from ICT's rules.
 3. **Hard Execution & Psychological Grade:** Score his Technician vs. Operator performance bluntly. Tear apart FOMO, impatience, and over-complication.
-4. **Dual-Platform Correction (YouTube + X):** Direct him to the exact ICT YouTube lecture and X post he must study right now to fix his repeating error.
-   - CRITICAL URL RULE: NEVER write or guess raw `https://x.com/.../status/12345...` or `youtube.com/watch?v=...` URLs inside your prose, because guessed IDs cause 404 errors. Name the exact ICT YouTube video/series title and X account/topic clearly in your text—the system automatically attaches the real, verified clickable links returned by Google Search at the bottom of your message.
+4. **Clickable Study Links (NEVER tell him to "go search" manually):**
+   - For YouTube: Name the exact ICT YouTube video/series title—the system automatically attaches verified clickable YouTube watch links from Google Search at the bottom of your message. NEVER invent or guess `youtube.com/watch?v=...` or `x.com/.../status/...` IDs in your text.
+   - For X Feeds: Always give him a direct, clickable X feed URL using exact URL-encoded search queries (no spaces) so one click opens the exact topic feed on X—for example:
+     `[ICT on Market Structure Shifts](https://x.com/search?q=from%3AI_Am_The_ICT%20%22Market%20Structure%20Shift%22&f=live)` or `[ICT on Draw on Liquidity](https://x.com/search?q=from%3AI_Am_The_ICT%20%22Draw%20on%20Liquidity%22&f=live)`.
 5. **Mandatory Next Assignment (With Submission Proof Required):** End EVERY response with a concrete, non-negotiable chart markup, tape-reading, or backtesting assignment that he must submit in his journal with screenshots and written proof before his next session.
 """.strip()
 
@@ -198,12 +201,12 @@ def generate_auto(contents_list):
             if verified_links:
                 text += "\n\n### Direct Study Links (Verified via Google Search)\n"
                 for title, uri in verified_links:
-                    text += f"- **{title}**: <{uri}>\n"
+                    text += f"- [{title}]({uri})\n"
             else:
                 text += (
                     "\n\n### Official Study Channels\n"
-                    "- **ICT Official YouTube**: <https://www.youtube.com/@InnerCircleTrader>\n"
-                    "- **ICT Official X**: <https://x.com/I_Am_The_ICT>\n"
+                    "- [ICT Official YouTube](https://www.youtube.com/@InnerCircleTrader)\n"
+                    "- [ICT Official X Feed](https://x.com/I_Am_The_ICT)\n"
                 )
             return text
         except Exception as e:
@@ -221,6 +224,27 @@ def generate_auto(contents_list):
                 print(f"Model '{model_name}' unavailable ({type(inner_e).__name__}): {inner_e}")
                 last_error = inner_e
     raise last_error
+
+async def send_chunked_message(channel, text, limit=1900):
+    """Splits long messages cleanly at newline/space boundaries so URLs are never cut in half."""
+    remaining = text.strip()
+    while remaining:
+        if len(remaining) <= limit:
+            await channel.send(remaining)
+            break
+
+        # Prefer splitting at a newline before the limit
+        split_idx = remaining.rfind("\n", 0, limit)
+        if split_idx == -1 or split_idx < limit // 2:
+            # Fallback to splitting at a space so we never cut inside a URL
+            split_idx = remaining.rfind(" ", 0, limit)
+        if split_idx == -1:
+            split_idx = limit
+
+        chunk = remaining[:split_idx].rstrip()
+        if chunk:
+            await channel.send(chunk)
+        remaining = remaining[split_idx:].lstrip()
 
 async def collect_forum_threads_summary(forum_channel, exclude_thread_id, bot_user, max_threads=6, msgs_per_thread=8):
     """Collects opening notes and recent takeaways from threads in a ForumChannel."""
@@ -300,7 +324,6 @@ async def gather_server_trading_memory(current_channel, bot_user):
         if not any(kw in ch_name_lower for kw in target_keywords):
             continue
 
-        # If it's another ForumChannel (like #ict-lecture-notes)
         if isinstance(ch, discord.ForumChannel):
             forum_summary = await collect_forum_threads_summary(
                 ch, exclude_thread_id=current_channel.id, bot_user=bot_user, max_threads=5, msgs_per_thread=6
@@ -308,7 +331,6 @@ async def gather_server_trading_memory(current_channel, bot_user):
             if forum_summary:
                 memory_blocks.append(f"=== SERVER FORUM: #{ch.name} ===\n" + forum_summary)
 
-        # If it's a TextChannel (like #strategy-backtesting-trades-round-up)
         elif isinstance(ch, discord.TextChannel):
             try:
                 recent_msgs = [m async for m in ch.history(limit=15, oldest_first=False)]
@@ -453,8 +475,8 @@ class MyClient(discord.Client):
 
                 reply_text = reply_text or "I didn't generate a response."
 
-                for i in range(0, len(reply_text), 1900):
-                    await message.channel.send(reply_text[i:i + 1900])
+                # Send cleanly without ever splitting inside a URL or Markdown link
+                await send_chunked_message(message.channel, reply_text)
 
             except Exception as e:
                 print(f"Error generating response: {e}")
